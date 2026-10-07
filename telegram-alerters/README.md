@@ -4,7 +4,7 @@
 
 | | Бот №1 `team_wallets_bot` | Бот №2 `exchange_flows_bot` |
 |---|---|---|
-| Что ловит | переводы токенов **с/на командные кошельки** | **заводы/выводы на биржи (CEX)** от **$80k** |
+| Что ловит | переводы токенов **с/на командные кошельки** (кошельки находит **сам**) | **заводы/выводы на биржи (CEX)** от **$80k** |
 | Telegram | свой токен бота + свой чат | свой токен бота + свой чат |
 | Конфиг | `config/team_wallets.yaml` | `config/exchange_flows.yaml` |
 | Состояние | `state/team_wallets.json` | `state/exchange_flows.json` |
@@ -18,6 +18,7 @@
 |---|---|---|
 | Транзакции | `eth_getLogs` через публичные RPC (publicnode, llamarpc, drpc, официальные RPC сетей) с ротацией и авто-подбором диапазона блоков | не нужен (можно добавить свои Alchemy / Infura / QuickNode — используются первыми) |
 | Цены, decimals, symbol | [DefiLlama coins API](https://coins.llama.fi) — один батч-запрос на все токены | не нужен |
+| Поиск командных кошельков | [Blockscout](https://eth.blockscout.com) API (деплоер, первые переводы, топ-холдеры, имена контрактов) + Etherscan V2 / Routescan | не нужен (Etherscan-ключ бесплатный, нужен только для BSC) |
 | Резерв цен | CoinGecko `simple/token_price` | не нужен (опц. demo-ключ) |
 | Адреса бирж | GitHub: [duneanalytics/spellbook `cex_evms_addresses.sql`](https://github.com/duneanalytics/spellbook/blob/main/dbt_subprojects/hourly_spellbook/models/_sector/cex/addresses/chains/cex_evms_addresses.sql) (курируемый список ~4.3k кошельков 300+ бирж) + [brianleect/etherscan-labels](https://github.com/brianleect/etherscan-labels) | не нужен |
 | Хостинг | GitHub Actions cron **или** любой VPS / Docker | — |
@@ -34,7 +35,7 @@
 ```bash
 cd telegram-alerters
 pip install -r requirements.txt
-cp config/team_wallets.example.yaml   config/team_wallets.yaml     # заполнить кошельки и токены
+cp config/team_wallets.example.yaml   config/team_wallets.yaml     # указать токены (кошельки найдутся сами)
 cp config/exchange_flows.example.yaml config/exchange_flows.yaml   # заполнить токены
 cp .env.example .env                                               # токены ботов и chat_id
 
@@ -49,6 +50,38 @@ python -m alerters.exchange_flows_bot -c config/exchange_flows.yaml
 ```
 
 Создайте **двух** ботов в [@BotFather](https://t.me/BotFather), добавьте каждого в свой чат/канал (в канал — админом). `chat_id` можно узнать, переслав сообщение из чата боту [@userinfobot](https://t.me/userinfobot) или через `https://api.telegram.org/bot<TOKEN>/getUpdates`.
+
+## Автопоиск командных кошельков (бот №1)
+
+Достаточно указать **только адреса токенов** — кошельки команды бот найдёт сам.
+
+1. **При старте и раз в сутки** для каждого токена строится список кандидатов с баллами:
+
+   | Сигнал | Баллы |
+   |---|---|
+   | Деплоер контракта токена | +4 |
+   | Получил токены при минте | +4 |
+   | Получил крупную долю (≥0.5% supply) в начальном распределении от деплоера/минтера | +3 |
+   | То же, на 2-м уровне (команда → vesting → кошелёк) | +2 |
+   | Контракт команды по имени/тегу: Safe-мультисиг, Vesting, Timelock, Treasury, DAO | +2 |
+   | Публичный тег обозревателя с названием проекта | +2 |
+   | Топ-холдер ≥0.5% supply (+1, если всё ещё держит аллокацию) | +1…+2 |
+
+   Кандидаты с баллом ≥ `min_score` (по умолчанию 3) начинают отслеживаться, в чат приходит сводка с причинами.
+   Исключаются: биржи (база адресов CEX), DEX-пулы и роутеры, мосты, стейкинг, airdrop-дистрибьюторы, burn-адреса, контракты-фабрики/лаунчпады.
+
+2. **В реальном времени («следование за деньгами»)**: если с командного кошелька уходит крупный перевод
+   (≥ `follow_min_usd` или ≥ `follow_min_supply_pct` supply) на новый адрес, который не биржа и не DeFi-контракт, —
+   адрес автоматически становится командным (до `follow_max_depth` шагов). Так ловятся новые кошельки, на которые команда
+   перекладывает токены перед продажей.
+
+Проверить, что найдёт бот, до запуска:
+```bash
+python -m alerters.team_wallets_bot.discover --chain ethereum --token 0xВАШ_ТОКЕН
+python -m alerters.team_wallets_bot.discover -c config/team_wallets.yaml
+```
+Лишние адреса (инвесторы, OTC-покупатели) — в `exclude_wallets`; известные вручную — в `wallets` (их имена важнее).
+Найденные кошельки хранятся в `state/team_wallets.json`.
 
 ## Деплой
 
@@ -75,7 +108,7 @@ Workflow-ы уже лежат в `.github/workflows/`:
 |---|---|---|
 | №1 | `TEAM_ALERTER_ENABLED=true` | `TEAM_BOT_TOKEN`, `TEAM_CHAT_ID`, `TEAM_CONFIG_YAML` (содержимое `team_wallets.yaml`) |
 | №2 | `EXCHANGE_ALERTER_ENABLED=true` | `EXCHANGE_BOT_TOKEN`, `EXCHANGE_CHAT_ID`, `EXCHANGE_CONFIG_YAML` |
-| общие, опц. | | `ETH_RPC_URL`, `COINGECKO_API_KEY` |
+| общие, опц. | | `ETH_RPC_URL`, `COINGECKO_API_KEY`, `ETHERSCAN_API_KEY` |
 
 Состояние (последний блок, отправленные алерты) переносится между запусками через `actions/cache`.
 Ограничения: cron в GitHub Actions срабатывает не чаще раза в 5 минут и часто с задержкой; для **публичного** репозитория минуты бесплатны без лимита, для **приватного** — 2000 мин/мес (два бота каждые 5 минут ≈ 17k мин/мес — для приватного репо используйте вариант A или увеличьте интервал cron до `*/30`).

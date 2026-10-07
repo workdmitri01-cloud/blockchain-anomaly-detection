@@ -61,7 +61,8 @@ class Transfer:
 
 def decode_transfer(chain: str, entry: dict) -> Transfer | None:
     """Decode an ERC-20 Transfer log. ERC-721 transfers (4 topics) are skipped."""
-    topics = entry.get("topics") or []
+    # Explorer APIs pad unused topics with null.
+    topics = [t for t in (entry.get("topics") or []) if t]
     if len(topics) != 3 or topics[0].lower() != TRANSFER_TOPIC:
         return None
     if entry.get("removed"):
@@ -78,9 +79,18 @@ def decode_transfer(chain: str, entry: dict) -> Transfer | None:
         to_addr=topic_to_address(topics[2]),
         raw_amount=amount,
         tx_hash=entry["transactionHash"].lower(),
-        log_index=int(entry["logIndex"], 16),
-        block=int(entry["blockNumber"], 16),
+        log_index=_int(entry.get("logIndex")),
+        block=_int(entry["blockNumber"]),
     )
+
+
+def _int(value) -> int:
+    """Parse RPC hex ("0x1a") or explorer decimal ("26" / "") numbers."""
+    if value in (None, "", "0x"):
+        return 0
+    if isinstance(value, int):
+        return value
+    return int(value, 16) if str(value).startswith("0x") else int(value)
 
 
 class EvmRpc:
@@ -165,6 +175,20 @@ class EvmRpc:
                 continue
             start = end + 1
         return out, chunk
+
+    def total_supply(self, token: str) -> int | None:
+        try:
+            res = self.call("eth_call", [{"to": token, "data": "0x18160ddd"}, "latest"])
+            return int(res, 16) if res and res != "0x" else None
+        except (RpcError, ValueError):
+            return None
+
+    def is_contract(self, address: str) -> bool | None:
+        try:
+            code = self.call("eth_getCode", [address, "latest"])
+            return bool(code and code != "0x")
+        except RpcError:
+            return None
 
     def erc20_metadata(self, token: str) -> tuple[str | None, int | None]:
         """Read symbol() and decimals() via eth_call. Best effort."""

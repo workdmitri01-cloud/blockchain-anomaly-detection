@@ -60,6 +60,9 @@ class BaseAlerter:
     def handle(self, chain: ChainConfig, transfers: list[Valued]) -> list[Alert]:
         raise NotImplementedError
 
+    def before_scan(self) -> None:
+        """Hook called at the start of every polling cycle (e.g. periodic discovery)."""
+
     def tracked_token_keys(self, chain: ChainConfig, transfers: list[Transfer]) -> set[str]:
         """Tokens that need price/metadata before handle(); default: all seen."""
         return {t.token for t in transfers}
@@ -125,6 +128,10 @@ class BaseAlerter:
     def run_once(self, max_runtime: float = 240) -> None:
         """Catch every chain up to head (bounded by max_runtime). Used by cron / GitHub Actions."""
         deadline = time.time() + max_runtime
+        try:
+            self.before_scan()
+        except Exception:  # noqa: BLE001
+            log.exception("[%s] before_scan failed", self.name)
         pending = list(self.cfg.chains.values())
         while pending and time.time() < deadline and not self._stop:
             still = []

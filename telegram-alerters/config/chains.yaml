@@ -7,9 +7,14 @@
 #
 # defillama  - chain slug for https://coins.llama.fi (free prices, no key)
 # coingecko  - platform id for the CoinGecko fallback price API
+# blockscout    - free Blockscout explorer (no key) used by team-wallet auto-discovery
+# etherscan_api - Etherscan-compatible API; etherscan.io needs ETHERSCAN_API_KEY (free,
+#                 one key for all chains), Routescan works without a key
 # log_chunk  - starting block range for eth_getLogs (auto-halved on "range too large")
 
 ethereum:
+  blockscout: https://eth.blockscout.com
+  etherscan_api: https://api.etherscan.io/v2/api
   chain_id: 1
   explorer: https://etherscan.io
   defillama: ethereum
@@ -24,6 +29,7 @@ ethereum:
     - https://rpc.mevblocker.io
 
 bsc:
+  etherscan_api: https://api.etherscan.io/v2/api
   chain_id: 56
   explorer: https://bscscan.com
   defillama: bsc
@@ -37,6 +43,8 @@ bsc:
     - https://bsc.drpc.org
 
 arbitrum:
+  blockscout: https://arbitrum.blockscout.com
+  etherscan_api: https://api.etherscan.io/v2/api
   chain_id: 42161
   explorer: https://arbiscan.io
   defillama: arbitrum
@@ -51,6 +59,8 @@ arbitrum:
     - https://arbitrum.drpc.org
 
 base:
+  blockscout: https://base.blockscout.com
+  etherscan_api: https://api.etherscan.io/v2/api
   chain_id: 8453
   explorer: https://basescan.org
   defillama: base
@@ -64,6 +74,8 @@ base:
     - https://base.drpc.org
 
 optimism:
+  blockscout: https://optimism.blockscout.com
+  etherscan_api: https://api.etherscan.io/v2/api
   chain_id: 10
   explorer: https://optimistic.etherscan.io
   defillama: optimism
@@ -77,6 +89,8 @@ optimism:
     - https://optimism.drpc.org
 
 polygon:
+  blockscout: https://polygon.blockscout.com
+  etherscan_api: https://api.etherscan.io/v2/api
   chain_id: 137
   explorer: https://polygonscan.com
   defillama: polygon
@@ -90,6 +104,7 @@ polygon:
     - https://polygon.drpc.org
 
 avalanche:
+  etherscan_api: https://api.routescan.io/v2/network/mainnet/evm/43114/etherscan/api
   chain_id: 43114
   explorer: https://snowtrace.io
   defillama: avax

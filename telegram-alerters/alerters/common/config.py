@@ -44,6 +44,9 @@ class ChainConfig:
     log_chunk: int = 2000
     initial_lookback: int = 50
     max_blocks_per_run: int = 20000
+    # Explorers for team-wallet auto-discovery.
+    blockscout: str | None = None
+    etherscan_api: str | None = None
 
     def tx_url(self, tx_hash: str) -> str:
         return f"{self.explorer.rstrip('/')}/tx/{tx_hash}"

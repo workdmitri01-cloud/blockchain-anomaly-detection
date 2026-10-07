@@ -3,7 +3,7 @@
 # Free hosting via GitHub Actions cron. Enable it with repository settings:
 #   Variables: TEAM_ALERTER_ENABLED = true
 #   Secrets:   TEAM_BOT_TOKEN, TEAM_CHAT_ID, TEAM_CONFIG_YAML (contents of config/team_wallets.yaml),
-#              ETH_RPC_URL (optional), COINGECKO_API_KEY (optional)
+#              ETH_RPC_URL, COINGECKO_API_KEY, ETHERSCAN_API_KEY (all optional)
 # State (last scanned block, sent alerts) is carried between runs with actions/cache.
 name: "Alerter: team wallets"
 
@@ -55,6 +55,7 @@ jobs:
           TEAM_CHAT_ID: ${{ secrets.TEAM_CHAT_ID }}
           ETH_RPC_URL: ${{ secrets.ETH_RPC_URL }}
           COINGECKO_API_KEY: ${{ secrets.COINGECKO_API_KEY }}
+          ETHERSCAN_API_KEY: ${{ secrets.ETHERSCAN_API_KEY }}
         run: python -m alerters.team_wallets_bot -c config/team_wallets.yaml --once --max-runtime 240
 
       - name: Save state
