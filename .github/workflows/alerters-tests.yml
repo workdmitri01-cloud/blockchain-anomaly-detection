@@ -1,0 +1,20 @@
+name: "Alerters: tests"
+
+on:
+  push:
+    paths: ["telegram-alerters/**", ".github/workflows/alerters-tests.yml"]
+  pull_request:
+    paths: ["telegram-alerters/**"]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: telegram-alerters
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install -r requirements-dev.txt && python -m pytest -q

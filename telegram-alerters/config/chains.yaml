@@ -1,0 +1,103 @@
+# Default EVM chain definitions shared by both bots.
+#
+# rpc_urls are FREE public endpoints without API keys. They are tried in order
+# and rotated on errors. Put your own keyed endpoints (Alchemy / Infura /
+# QuickNode / Ankr / own node) into the bot config `chains.<name>.rpc_urls` —
+# they are prepended to this list and used first.
+#
+# defillama  - chain slug for https://coins.llama.fi (free prices, no key)
+# coingecko  - platform id for the CoinGecko fallback price API
+# log_chunk  - starting block range for eth_getLogs (auto-halved on "range too large")
+
+ethereum:
+  chain_id: 1
+  explorer: https://etherscan.io
+  defillama: ethereum
+  coingecko: ethereum
+  confirmations: 2
+  log_chunk: 1000
+  initial_lookback: 25
+  rpc_urls:
+    - https://ethereum-rpc.publicnode.com
+    - https://eth.llamarpc.com
+    - https://eth.drpc.org
+    - https://rpc.mevblocker.io
+
+bsc:
+  chain_id: 56
+  explorer: https://bscscan.com
+  defillama: bsc
+  coingecko: binance-smart-chain
+  confirmations: 3
+  log_chunk: 1000
+  initial_lookback: 100
+  rpc_urls:
+    - https://bsc-rpc.publicnode.com
+    - https://bsc-dataseed.bnbchain.org
+    - https://bsc.drpc.org
+
+arbitrum:
+  chain_id: 42161
+  explorer: https://arbiscan.io
+  defillama: arbitrum
+  coingecko: arbitrum-one
+  confirmations: 5
+  log_chunk: 5000
+  initial_lookback: 1000
+  max_blocks_per_run: 200000
+  rpc_urls:
+    - https://arbitrum-one-rpc.publicnode.com
+    - https://arb1.arbitrum.io/rpc
+    - https://arbitrum.drpc.org
+
+base:
+  chain_id: 8453
+  explorer: https://basescan.org
+  defillama: base
+  coingecko: base
+  confirmations: 3
+  log_chunk: 2000
+  initial_lookback: 150
+  rpc_urls:
+    - https://base-rpc.publicnode.com
+    - https://mainnet.base.org
+    - https://base.drpc.org
+
+optimism:
+  chain_id: 10
+  explorer: https://optimistic.etherscan.io
+  defillama: optimism
+  coingecko: optimistic-ethereum
+  confirmations: 3
+  log_chunk: 2000
+  initial_lookback: 150
+  rpc_urls:
+    - https://optimism-rpc.publicnode.com
+    - https://mainnet.optimism.io
+    - https://optimism.drpc.org
+
+polygon:
+  chain_id: 137
+  explorer: https://polygonscan.com
+  defillama: polygon
+  coingecko: polygon-pos
+  confirmations: 10
+  log_chunk: 1000
+  initial_lookback: 150
+  rpc_urls:
+    - https://polygon-bor-rpc.publicnode.com
+    - https://polygon-rpc.com
+    - https://polygon.drpc.org
+
+avalanche:
+  chain_id: 43114
+  explorer: https://snowtrace.io
+  defillama: avax
+  coingecko: avalanche
+  confirmations: 3
+  log_chunk: 2000
+  initial_lookback: 150
+  rpc_urls:
+    - https://avalanche-c-chain-rpc.publicnode.com
+    - https://api.avax.network/ext/bc/C/rpc
+    - https://avalanche.drpc.org

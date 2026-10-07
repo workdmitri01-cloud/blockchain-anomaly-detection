@@ -1,0 +1,39 @@
+# ======================================================================
+#  Бот №2 — заводы / выводы токенов на биржи (CEX) от $80k
+#  Скопируйте в config/exchange_flows.yaml и заполните.
+# ======================================================================
+
+telegram:
+  bot_token: ${EXCHANGE_BOT_TOKEN}   # токен ОТДЕЛЬНОГО бота (не тот же, что у бота №1)
+  chat_id: ${EXCHANGE_CHAT_ID}
+
+min_usd: 80000
+
+tokens:
+  - chain: ethereum
+    address: "0x514910771af9ca656af840dff83e8264ecf986ca"   # пример: LINK — замените на свои токены
+  # - chain: ethereum
+  #   address: "0x..."
+  #   min_usd: 150000      # индивидуальный порог
+
+exchanges:
+  include: []              # только эти биржи, напр. [Binance, OKX, Bybit]; пусто = все (~4.3k адресов)
+  exclude: []              # исключить, напр. [ShapeShift, ChangeNOW]
+  extra_addresses:         # свои адреса бирж (дополняют открытую базу)
+    # "0x...": "Binance"
+
+alert_same_exchange: false        # Binance hot -> Binance cold
+alert_exchange_to_exchange: true  # Binance -> OKX
+track_deposit_addresses: true     # показывать исходного отправителя при свипе с депозитного адреса
+deposit_memory_hours: 72
+
+known_addresses:
+  # "0xteam...": "Treasury проекта"
+
+chains:
+  ethereum:
+    rpc_urls:
+      - ${ETH_RPC_URL}
+
+state_file: state/exchange_flows.json
+poll_interval: 20

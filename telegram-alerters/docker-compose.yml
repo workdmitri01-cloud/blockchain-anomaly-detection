@@ -1,0 +1,26 @@
+# Two independent containers: separate Telegram bots, configs, state and restarts.
+#   cp .env.example .env && cp config/*.example.yaml ... && docker compose up -d
+services:
+  team-wallets-bot:
+    build: .
+    command: ["alerters.team_wallets_bot", "-c", "config/team_wallets.yaml"]
+    env_file: .env
+    volumes:
+      - ./config/team_wallets.yaml:/app/config/team_wallets.yaml:ro
+      - ./data:/app/data:ro
+      - team-state:/app/state
+    restart: unless-stopped
+
+  exchange-flows-bot:
+    build: .
+    command: ["alerters.exchange_flows_bot", "-c", "config/exchange_flows.yaml"]
+    env_file: .env
+    volumes:
+      - ./config/exchange_flows.yaml:/app/config/exchange_flows.yaml:ro
+      - ./data:/app/data:ro
+      - exchange-state:/app/state
+    restart: unless-stopped
+
+volumes:
+  team-state:
+  exchange-state:

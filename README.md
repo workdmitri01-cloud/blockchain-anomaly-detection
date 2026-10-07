@@ -35,3 +35,9 @@ Bitcoin hacks/frauds dataset: https://ieee-dataport.org/open-access/bitcoin-hack
 ## Data License
 
 <a rel="license" href="http://creativecommons.org/licenses/by-sa/4.0/"><img alt="Creative Commons License" style="border-width:0" src="https://i.creativecommons.org/l/by-sa/4.0/88x31.png" /></a><br />This data is licensed under a <a rel="license" href="http://creativecommons.org/licenses/by-sa/4.0/">Creative Commons Attribution-ShareAlike 4.0 International License</a>.
+
+## Telegram alerters
+
+[`telegram-alerters/`](telegram-alerters/README.md) — two independent Telegram bots for on-chain token alerts:
+transfers to/from team wallets and large (≥ $80k) CEX deposits/withdrawals. Built on free public RPCs,
+DefiLlama prices and open-source exchange address labels from GitHub.

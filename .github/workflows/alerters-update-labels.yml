@@ -1,0 +1,35 @@
+# Weekly refresh of the open-source CEX address book (Dune spellbook + etherscan-labels).
+name: "Alerters: update exchange labels"
+
+on:
+  schedule:
+    - cron: "17 3 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: telegram-alerters
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install -r requirements.txt
+      - run: python scripts/update_labels.py
+      - name: Commit if changed
+        run: |
+          if git diff --quiet -- data/cex_addresses.json; then echo "no changes"; exit 0; fi
+          # Ignore the timestamp-only diff
+          if [ "$(git diff --numstat -- data/cex_addresses.json | awk '{print $1}')" = "1" ]; then echo "only timestamp changed"; exit 0; fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add data/cex_addresses.json
+          git commit -m "alerters: refresh CEX address book"
+          git push
+
