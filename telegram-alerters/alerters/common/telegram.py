@@ -95,3 +95,25 @@ def fmt_usd(value: float | None) -> str:
 
 def short(addr: str) -> str:
     return f"{addr[:6]}…{addr[-4:]}"
+
+
+def where(chain, tr) -> str:
+    """'⛓ ethereum · блок 123' / 'solana · слот 1' / 'hypercore' (no blocks)."""
+    text = f"⛓ {esc(chain.name)}"
+    if tr.block and chain.kind != "hypercore":
+        text += f" · {'слот' if chain.kind == 'solana' else 'блок'} {tr.block}"
+    return text
+
+
+def special_label(chain, addr: str) -> str | None:
+    """Mint/burn and bridge pseudo-addresses on every chain kind."""
+    from .addr import TRON_ZERO
+
+    if addr in ("0x" + "0" * 40, TRON_ZERO, "mint", "burn"):
+        return "🪙 mint / burn"
+    if chain.kind == "hypercore":
+        from .hypercore import system_label
+
+        label = system_label(addr)
+        return f"🌉 {label}" if label else None
+    return None

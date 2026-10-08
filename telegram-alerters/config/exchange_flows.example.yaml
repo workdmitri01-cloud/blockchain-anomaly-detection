@@ -15,12 +15,24 @@ tokens:
   # - chain: ethereum
   #   address: "0x..."
   #   min_usd: 150000      # индивидуальный порог
+  # --- другие сети (раскомментируйте нужные) ---
+  # - chain: tron                       # TRC-20, адрес в формате T...
+  #   address: "TXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX"
+  # - chain: solana                     # SPL mint (регистр важен!)
+  #   address: "So11111111111111111111111111111111111111112"
+  # - chain: hyperevm                   # ERC-20 на HyperEVM
+  #   address: "0x..."
+  # - chain: hypercore                  # спот-токен Hyperliquid L1 — указывается ИМЯ токена
+  #   address: "PURR"
 
 exchanges:
   include: []              # только эти биржи, напр. [Binance, OKX, Bybit]; пусто = все (~4.3k адресов)
   exclude: []              # исключить, напр. [ShapeShift, ChangeNOW]
-  extra_addresses:         # свои адреса бирж (дополняют открытую базу)
+  extra_addresses:         # свои адреса бирж (дополняют открытую базу); EVM, Tron (T...) или Solana
     # "0x...": "Binance"
+    # "TXXXX...": "Bybit"
+  hypercore_addresses:     # аккаунты бирж на Hyperliquid HyperCore (EVM-формат)
+    # "0x...": "Bybit"
 
 alert_same_exchange: false        # Binance hot -> Binance cold
 alert_exchange_to_exchange: true  # Binance -> OKX

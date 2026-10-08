@@ -13,6 +13,8 @@ from dataclasses import dataclass
 
 import requests
 
+from .addr import norm
+
 log = logging.getLogger(__name__)
 
 DEFILLAMA_URL = "https://coins.llama.fi/prices/current/{coins}"
@@ -37,17 +39,17 @@ class PriceOracle:
         self._coingecko_key = os.environ.get("COINGECKO_API_KEY", "")
 
     def set_fixed_price(self, chain: str, token: str, price: float) -> None:
-        self._fixed[(chain, token.lower())] = float(price)
+        self._fixed[(chain, norm(token))] = float(price)
 
     def set_metadata(self, chain: str, token: str, symbol: str | None, decimals: int | None) -> None:
-        info = self._cache.setdefault((chain, token.lower()), TokenInfo())
+        info = self._cache.setdefault((chain, norm(token)), TokenInfo())
         if symbol:
             info.symbol = symbol
         if decimals is not None:
             info.decimals = decimals
 
     def get(self, chain: str, token: str) -> TokenInfo:
-        return self._cache.setdefault((chain, token.lower()), TokenInfo())
+        return self._cache.setdefault((chain, norm(token)), TokenInfo())
 
     def refresh(self, wanted: dict[str, tuple[str, str | None]]) -> None:
         """Refresh stale prices.
@@ -114,7 +116,7 @@ class PriceOracle:
                 log.warning("CoinGecko price request failed: %s", exc)
                 continue
             for chain, token in items:
-                usd = (data.get(token) or {}).get("usd")
+                usd = (data.get(token) or data.get(token.lower()) or {}).get("usd")
                 if usd:
                     info = self.get(chain, token)
                     info.price = float(usd)

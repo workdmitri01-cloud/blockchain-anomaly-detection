@@ -1,6 +1,6 @@
 # Telegram-алертеры ончейн-транзакций
 
-Два **независимых** Telegram-бота для EVM-сетей (Ethereum, BSC, Arbitrum, Base, Optimism, Polygon, Avalanche):
+Два **независимых** Telegram-бота: EVM-сети (Ethereum, BSC, Arbitrum, Base, Optimism, Polygon, Avalanche, **HyperEVM**) плюс **Tron**, **Solana** и **Hyperliquid HyperCore**:
 
 | | Бот №1 `team_wallets_bot` | Бот №2 `exchange_flows_bot` |
 |---|---|---|
@@ -20,7 +20,7 @@
 | Цены, decimals, symbol | [DefiLlama coins API](https://coins.llama.fi) — один батч-запрос на все токены | не нужен |
 | Поиск командных кошельков | [Blockscout](https://eth.blockscout.com) API (деплоер, первые переводы, топ-холдеры, имена контрактов) + Etherscan V2 / Routescan; для **BSC** — [NodeReal MegaNode](https://nodereal.io/meganode) (данные BSCTrace) | ETH/Base/OP/Arbitrum/Polygon/Avalanche — не нужен; **BSC — бесплатный ключ NodeReal** (`NODEREAL_API_KEY`) |
 | Резерв цен | CoinGecko `simple/token_price` | не нужен (опц. demo-ключ) |
-| Адреса бирж | GitHub: [duneanalytics/spellbook `cex_evms_addresses.sql`](https://github.com/duneanalytics/spellbook/blob/main/dbt_subprojects/hourly_spellbook/models/_sector/cex/addresses/chains/cex_evms_addresses.sql) (курируемый список ~4.3k кошельков 300+ бирж) + [brianleect/etherscan-labels](https://github.com/brianleect/etherscan-labels) | не нужен |
+| Адреса бирж | GitHub (+ Tron/Solana: `cex_tron_addresses.sql`, `cex_solana_addresses.sql` из того же spellbook): [duneanalytics/spellbook `cex_evms_addresses.sql`](https://github.com/duneanalytics/spellbook/blob/main/dbt_subprojects/hourly_spellbook/models/_sector/cex/addresses/chains/cex_evms_addresses.sql) (курируемый список ~4.3k кошельков 300+ бирж) + [brianleect/etherscan-labels](https://github.com/brianleect/etherscan-labels) | не нужен |
 | Хостинг | GitHub Actions cron **или** любой VPS / Docker | — |
 
 ### Почему это эффективно
@@ -50,6 +50,31 @@ python -m alerters.exchange_flows_bot -c config/exchange_flows.yaml
 ```
 
 Создайте **двух** ботов в [@BotFather](https://t.me/BotFather), добавьте каждого в свой чат/канал (в канал — админом). `chat_id` можно узнать, переслав сообщение из чата боту [@userinfobot](https://t.me/userinfobot) или через `https://api.telegram.org/bot<TOKEN>/getUpdates`.
+
+## Покрытие сетей
+
+| Сеть | Источник переводов | Бот №1 | Бот №2 (биржи) | Автопоиск кошельков | Ключ |
+|---|---|---|---|---|---|
+| Ethereum, Arbitrum, Base, Optimism, Polygon | `eth_getLogs`, публичные RPC | ✅ | ✅ все ~4.3k адресов CEX | ✅ полный (Blockscout) | не нужен |
+| Avalanche | `eth_getLogs` | ✅ | ✅ | ✅ без топ-холдеров (Routescan) | не нужен |
+| BSC | `eth_getLogs` | ✅ | ✅ | ✅ без топ-холдеров (NodeReal) | `NODEREAL_API_KEY` для автопоиска |
+| **HyperEVM** | `eth_getLogs`, `rpc.hyperliquid.xyz/evm` | ✅ | ✅ | ⚠️ только деплоер/распознавание по RPC | не нужен |
+| **Tron** | TronGrid: все Transfer-события токена | ✅ | ✅ 142 кошелька бирж (Dune) | ✅ создатель + первые переводы, без топ-холдеров | не нужен (`TRONGRID_API_KEY` поднимает лимиты) |
+| **Solana** | JSON-RPC: опрос токен-аккаунтов отслеживаемых кошельков | ✅ | ✅ 130 кошельков бирж (Dune) | ✅ mint authority + 20 крупнейших холдеров | не нужен (свой RPC — для нагрузки) |
+| **HyperCore** (спот Hyperliquid) | официальный info API, ledger каждого аккаунта | ✅ | ⚠️ только аккаунты бирж из `hypercore_addresses` / найденные `--hypercore` | ✅ деплоер + genesis + non-circulating | не нужен |
+
+Особенности:
+* **Tron** работает как EVM: один запрос на токен возвращает все переводы, биржи сверяются локально.
+* **Solana** не умеет дёшево отдать «все переводы токена», поэтому боты следят за конкретными кошельками
+  (командными / горячими кошельками бирж) и разбирают изменения балансов в транзакциях. Публичный RPC
+  `api.mainnet-beta.solana.com` сильно ограничен по частоте — для бота №2 с активным токеном возьмите бесплатный
+  RPC Helius / QuickNode (`SOLANA_RPC_URL`). PDA (кошельки программ: пулы, vesting) отличаются от обычных
+  кошельков проверкой точки ed25519; известные программы (Raydium, Orca, Meteora, Pump.fun, Squads, Streamflow) подписываются.
+* **HyperCore**: в конфиге токен задаётся **именем** (`address: "PURR"`). Сумма в $ берётся прямо из ledger
+  (`usdcValue`). Переводы HyperCore ↔ HyperEVM помечаются как «HyperEVM bridge». У бирж на HyperCore нет
+  открытой базы адресов: `scripts/update_labels.py --hypercore` проверяет, какие из EVM-кошельков бирж
+  держат балансы на HyperCore (раз в неделю в GitHub Actions); свои адреса — `exchanges.hypercore_addresses`.
+* `initial_lookback` для Tron / Solana / HyperCore — в **секундах** (на сколько назад смотреть при первом запуске).
 
 ## Автопоиск командных кошельков (бот №1)
 

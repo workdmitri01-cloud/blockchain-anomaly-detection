@@ -22,6 +22,9 @@ from pathlib import Path
 
 import requests
 
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+from alerters.common.addr import is_solana, is_tron  # noqa: E402
+
 ROOT = Path(__file__).resolve().parents[1]
 RAW = "https://raw.githubusercontent.com"
 DUNE_URL = f"{RAW}/duneanalytics/spellbook/main/dbt_subprojects/hourly_spellbook/models/_sector/cex/addresses/chains/cex_evms_addresses.sql"
@@ -73,6 +76,13 @@ NON_FLOW_RE = re.compile(
     re.I,
 )
 
+DUNE_NON_EVM = {
+    fam: f"{RAW}/duneanalytics/spellbook/main/dbt_subprojects/hourly_spellbook/models/_sector/cex/addresses/chains/{fam}/cex_{fam}_addresses.sql"
+    for fam in ("tron", "solana")
+}
+NON_EVM_ROW_RE = re.compile(r"\(\s*'(tron|solana)'\s*,\s*'([^']+)'\s*,\s*'([^']*)'\s*,\s*'([^']*)'")
+HYPERLIQUID_INFO = "https://api.hyperliquid.xyz/info"
+
 ROW_RE = re.compile(r"\(\s*(0x[0-9a-fA-F]{40})\s*,\s*'([^']*)'\s*,\s*'([^']*)'")
 
 
@@ -114,9 +124,49 @@ def from_etherscan_labels(entities: list[str]) -> dict[str, list[str]]:
     return out
 
 
+def from_dune_non_evm() -> dict[str, list[str]]:
+    """Tron / Solana exchange wallets (base58, validated)."""
+    out: dict[str, list[str]] = {}
+    for fam, url in DUNE_NON_EVM.items():
+        try:
+            text = fetch(url)
+        except requests.RequestException as exc:
+            print(f"warn: dune {fam}: {exc}", file=sys.stderr)
+            continue
+        for chain, addr, entity, name in NON_EVM_ROW_RE.findall(text):
+            ok = is_tron(addr) if chain == "tron" else is_solana(addr) and not addr.startswith("0x")
+            if ok and not NON_FLOW_RE.search(name):
+                out[addr] = [entity, name, chain]
+    return out
+
+
+def hypercore_active(addresses: list[str]) -> list[str]:
+    """EVM exchange wallets that hold spot balances on Hyperliquid HyperCore (~7 min for 4k addresses)."""
+    import time
+
+    active, last = [], 0.0
+    for i, addr in enumerate(addresses):
+        time.sleep(max(0.0, 0.11 - (time.time() - last)))
+        last = time.time()
+        try:
+            resp = requests.post(HYPERLIQUID_INFO, json={"type": "spotClearinghouseState", "user": addr}, timeout=20)
+            if resp.status_code == 429:
+                time.sleep(10)
+                continue
+            if any(float(b.get("total") or 0) > 0 for b in (resp.json() or {}).get("balances", [])):
+                active.append(addr)
+        except (requests.RequestException, ValueError):
+            continue
+        if i % 500 == 0:
+            print(f"hypercore probe {i}/{len(addresses)}: {len(active)} active", file=sys.stderr)
+    return active
+
+
 def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--out", default=str(ROOT / "data" / "cex_addresses.json"))
+    ap.add_argument("--hypercore", action="store_true",
+                    help="probe which EVM exchange wallets are active on Hyperliquid HyperCore (slow)")
     args = ap.parse_args()
 
     dune = from_dune()
@@ -127,14 +177,25 @@ def main() -> None:
     merged: dict[str, list[str]] = {}
     merged.update({a: v for a, v in etherscan.items()})
     merged.update(dune)  # Dune is curated -> wins over explorer tags
+    non_evm = from_dune_non_evm()
+    merged.update(non_evm)
     for addr, v in custom.items():  # custom wins over everything
-        merged[addr.lower()] = v if isinstance(v, list) else [v, v]
+        key = addr.lower() if addr.startswith("0x") else addr
+        merged[key] = v if isinstance(v, list) else [v, v]
+
+    previous = json.loads(Path(args.out).read_text()) if Path(args.out).exists() else {}
+    if args.hypercore:
+        hypercore = hypercore_active([a for a in merged if a.startswith("0x")])
+    else:
+        hypercore = [a for a in previous.get("hypercore", []) if a in merged]
 
     result = {
         "generated_at": dt.datetime.now(dt.timezone.utc).isoformat(timespec="seconds"),
-        "sources": [DUNE_URL, *ETHERSCAN_LABELS.values(), "data/cex_addresses_custom.json"],
-        "counts": {"dune": len(dune), "etherscan_labels": len(etherscan), "custom": len(custom), "total": len(merged)},
+        "sources": [DUNE_URL, *DUNE_NON_EVM.values(), *ETHERSCAN_LABELS.values(), "data/cex_addresses_custom.json"],
+        "counts": {"dune": len(dune), "dune_tron_solana": len(non_evm), "etherscan_labels": len(etherscan),
+                   "custom": len(custom), "hypercore_active": len(hypercore), "total": len(merged)},
         "addresses": dict(sorted(merged.items())),
+        "hypercore": sorted(hypercore),
     }
     Path(args.out).write_text(json.dumps(result, indent=0, ensure_ascii=False) + "\n", encoding="utf-8")
     print(json.dumps(result["counts"]))

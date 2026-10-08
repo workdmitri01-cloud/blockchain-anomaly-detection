@@ -9,6 +9,8 @@ from typing import Any
 
 import yaml
 
+from .addr import norm
+
 PACKAGE_ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_CHAINS_FILE = PACKAGE_ROOT / "config" / "chains.yaml"
 
@@ -35,10 +37,16 @@ def load_yaml(path: str | os.PathLike) -> dict:
 @dataclass
 class ChainConfig:
     name: str
-    chain_id: int
     rpc_urls: list[str]
     explorer: str
-    defillama: str
+    defillama: str | None = None
+    chain_id: int = 0
+    # evm | tron | solana | hypercore
+    kind: str = "evm"
+    # REST API for non-EVM chains (TronGrid, Hyperliquid info)
+    api_url: str | None = None
+    tx_path: str = "/tx/{}"
+    address_path: str = "/address/{}"
     coingecko: str | None = None
     confirmations: int = 2
     log_chunk: int = 2000
@@ -50,10 +58,10 @@ class ChainConfig:
     nodereal: str | None = None
 
     def tx_url(self, tx_hash: str) -> str:
-        return f"{self.explorer.rstrip('/')}/tx/{tx_hash}"
+        return self.explorer.rstrip("/") + self.tx_path.format(tx_hash)
 
     def address_url(self, address: str) -> str:
-        return f"{self.explorer.rstrip('/')}/address/{address}"
+        return self.explorer.rstrip("/") + self.address_path.format(address)
 
 
 @dataclass
@@ -109,7 +117,7 @@ def load_chains(overrides: dict | None, used: set[str], path: Path = DEFAULT_CHA
         rpc += [u for u in base.get("rpc_urls", []) if u and u not in rpc]
         base.update(extra)
         base["rpc_urls"] = rpc
-        if not rpc:
+        if not rpc and base.get("kind", "evm") in ("evm", "solana"):
             raise ValueError(f"Chain '{name}' has no RPC URLs")
         chains[name] = ChainConfig(name=name, **base)
     return chains
@@ -138,7 +146,7 @@ def parse_tokens(raw: list | None) -> list[TokenConfig]:
         tokens.append(
             TokenConfig(
                 chain=item["chain"],
-                address=item["address"].lower(),
+                address=norm(str(item["address"])),
                 symbol=item.get("symbol"),
                 decimals=item.get("decimals"),
                 price_usd=item.get("price_usd"),

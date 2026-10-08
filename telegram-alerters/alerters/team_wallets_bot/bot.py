@@ -14,11 +14,12 @@ from ..common.config import (
     parse_telegram,
     parse_tokens,
 )
+from ..common.addr import norm
 from ..common.evm import TRANSFER_TOPIC, address_topic, chunked
 from ..common.explorer import AddressInfo, Explorer, explorer_for
 from ..common.labels import AddressBook
 from ..common.runner import Alert, BaseAlerter, Valued
-from ..common.telegram import esc, fmt_amount, fmt_usd, short
+from ..common.telegram import esc, fmt_amount, fmt_usd, short, special_label, where
 from .discovery import BURN, DiscoveryParams, classify, discover
 
 log = logging.getLogger(__name__)
@@ -73,7 +74,7 @@ def load_config(path: str, dry_run: bool = False) -> TeamBotConfig:
         chains = w.get("chains") or w.get("chain")
         if isinstance(chains, str):
             chains = None if chains in ("*", "all") else [chains]
-        wallets.append(TeamWallet(address=w["address"].lower(), name=w.get("name") or short(w["address"]), chains=chains))
+        wallets.append(TeamWallet(address=norm(w["address"]), name=w.get("name") or short(w["address"]), chains=chains))
     ad_raw = raw.get("auto_discovery")
     ad = AutoDiscoveryConfig(**ad_raw) if isinstance(ad_raw, dict) else AutoDiscoveryConfig(enabled=ad_raw is not False)
     if not wallets and not ad.enabled:
@@ -99,13 +100,13 @@ def load_config(path: str, dry_run: bool = False) -> TeamBotConfig:
         poll_interval=int(raw.get("poll_interval", 20)),
         labels_file=raw.get("labels_file"),
         wallets=wallets,
-        exclude_wallets={a.lower() for a in raw.get("exclude_wallets") or []},
+        exclude_wallets={norm(a) for a in raw.get("exclude_wallets") or []},
         auto_discovery=ad,
         track_all_tokens=bool(raw.get("track_all_tokens", False)),
         min_usd=float(raw.get("min_usd", 0) or 0),
         skip_unpriced=bool(raw.get("skip_unpriced", True)),
         alert_internal=bool(raw.get("alert_internal", True)),
-        known_addresses={k.lower(): v for k, v in (raw.get("known_addresses") or {}).items()},
+        known_addresses={norm(k): v for k, v in (raw.get("known_addresses") or {}).items()},
     )
     if not cfg.track_all_tokens and not cfg.tokens:
         raise ValueError("team wallets bot: set 'tokens' or enable 'track_all_tokens'")
@@ -120,7 +121,7 @@ class TeamWalletsAlerter(BaseAlerter):
         super().__init__(*args, **kwargs)
         self.book = book if book is not None else AddressBook.from_file(self.cfg.labels_file)
         self.explorers = explorers if explorers is not None else {
-            n: explorer_for(c) for n, c in self.cfg.chains.items()
+            n: explorer_for(c, self.rpcs.get(n)) for n, c in self.cfg.chains.items()
         }
 
     # --- wallet registry: manual + auto-discovered ------------------------------------
@@ -233,6 +234,9 @@ class TeamWalletsAlerter(BaseAlerter):
         return cache.get(key)
 
     # --- scanning ------------------------------------------------------------------------
+    def watch_addresses(self, chain: ChainConfig) -> set[str]:
+        return set(self.team_wallets(chain.name))
+
     def log_filters(self, chain: ChainConfig) -> list[dict]:
         wallets = [address_topic(a) for a in self.team_wallets(chain.name)]
         tokens = [t.address for t in self.cfg.tokens_for(chain.name)]
@@ -253,6 +257,8 @@ class TeamWalletsAlerter(BaseAlerter):
         return self.cfg.min_usd
 
     def describe(self, chain: ChainConfig, addr: str, team: dict[str, TeamWallet]) -> str:
+        if addr in ("mint", "burn"):
+            return special_label(chain, addr)
         link = f'<a href="{chain.address_url(addr)}">{short(addr)}</a>'
         if addr in team:
             return f"👥 <b>{esc(team[addr].name)}</b> ({link})"
@@ -261,9 +267,7 @@ class TeamWalletsAlerter(BaseAlerter):
         label = self.book.get(addr)
         if label:
             return f"🏦 <b>{esc(label.entity)}</b> [{esc(label.name)}] ({link})"
-        if addr == "0x" + "0" * 40:
-            return "🪙 mint / burn (0x0)"
-        return link
+        return special_label(chain, addr) or link
 
     def handle(self, chain: ChainConfig, transfers: list[Valued]) -> list[Alert]:
         team = self.team_wallets(chain.name)
@@ -298,7 +302,7 @@ class TeamWalletsAlerter(BaseAlerter):
             text = (
                 f"{head}\n\n"
                 f"💰 <b>{fmt_amount(v.amount)} {esc(v.symbol)}</b> (~{fmt_usd(v.usd)})\n"
-                f"⛓ {esc(chain.name)} · блок {tr.block}\n"
+                f"{where(chain, tr)}\n"
                 f"От: {self.describe(chain, tr.from_addr, team)}\n"
                 f"Кому: {self.describe(chain, tr.to_addr, team)}\n"
             )

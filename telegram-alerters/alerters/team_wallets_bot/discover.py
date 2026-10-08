@@ -11,9 +11,10 @@ import argparse
 import logging
 
 from ..common.config import load_chains
-from ..common.evm import EvmRpc
+from ..common.addr import norm
 from ..common.explorer import explorer_for
 from ..common.labels import AddressBook
+from ..common.runner import make_client
 from .discovery import DiscoveryParams, discover
 
 
@@ -38,7 +39,7 @@ def main() -> None:
     else:
         if not (args.chain and args.token):
             ap.error("give -c CONFIG or --chain and --token")
-        targets = [(args.chain, args.token.lower(), None)]
+        targets = [(args.chain, norm(args.token), None)]
         chains, params, book_file = load_chains(None, {args.chain}), DiscoveryParams(), None
     if args.min_score is not None:
         params.min_score = args.min_score
@@ -46,7 +47,8 @@ def main() -> None:
 
     for chain, token, symbol in targets:
         c = chains[chain]
-        team, low = discover(chain, token, symbol, EvmRpc(c.rpc_urls), explorer_for(c), book, params)
+        client = make_client(c)
+        team, low = discover(chain, token, symbol, client, explorer_for(c, client), book, params)
         print(f"\n=== {symbol or token} on {chain} ===")
         for title, items in (("TEAM (будут отслеживаться)", team), ("низкая уверенность", low)):
             print(f"-- {title}: {len(items)}")

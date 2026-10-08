@@ -55,6 +55,8 @@ jobs:
           EXCHANGE_CHAT_ID: ${{ secrets.EXCHANGE_CHAT_ID }}
           ETH_RPC_URL: ${{ secrets.ETH_RPC_URL }}
           COINGECKO_API_KEY: ${{ secrets.COINGECKO_API_KEY }}
+          TRONGRID_API_KEY: ${{ secrets.TRONGRID_API_KEY }}
+          SOLANA_RPC_URL: ${{ secrets.SOLANA_RPC_URL }}
         run: python -m alerters.exchange_flows_bot -c config/exchange_flows.yaml --once --max-runtime 240
 
       - name: Save state

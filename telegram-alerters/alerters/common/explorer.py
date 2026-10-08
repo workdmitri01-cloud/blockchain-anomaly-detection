@@ -43,6 +43,12 @@ class Explorer:
         """Oldest Transfer logs of the token (RPC log format)."""
         raise NotImplementedError
 
+    def first_transfers(self, chain: str, token: str, limit: int = 1000) -> list:
+        """Oldest transfers as Transfer objects (non-EVM explorers override this)."""
+        from .evm import decode_transfer
+
+        return [t for t in (decode_transfer(chain, lg) for lg in self.first_transfer_logs(token, limit)) if t]
+
     def top_holders(self, token: str, limit: int = 50) -> list[tuple[str, int, AddressInfo]]:
         raise NotImplementedError
 
@@ -271,6 +277,9 @@ class MultiExplorer(Explorer):
     def first_transfer_logs(self, token, limit=1000):
         return self._try("first_transfer_logs", token, limit, empty=[])
 
+    def first_transfers(self, chain, token, limit=1000):
+        return self._try("first_transfers", chain, token, limit, empty=[])
+
     def top_holders(self, token, limit=50):
         return self._try("top_holders", token, limit, empty=[])
 
@@ -289,7 +298,16 @@ class MultiExplorer(Explorer):
         return merged
 
 
-def explorer_for(chain) -> MultiExplorer:
+def explorer_for(chain, client=None) -> MultiExplorer:
+    """Discovery backends for a chain; ``client`` is the chain's polling client (non-EVM)."""
+    kind = getattr(chain, "kind", "evm")
+    if kind != "evm":
+        from .hypercore import HyperCoreExplorer
+        from .solana import SolanaExplorer
+        from .tron import TronExplorer
+
+        cls = {"tron": TronExplorer, "solana": SolanaExplorer, "hypercore": HyperCoreExplorer}[kind]
+        return MultiExplorer([cls(client)] if client is not None else [])
     backends: list[Explorer] = []
     if getattr(chain, "blockscout", None):
         backends.append(BlockscoutExplorer(chain.blockscout))

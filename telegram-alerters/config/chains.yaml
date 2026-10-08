@@ -122,3 +122,58 @@ avalanche:
     - https://avalanche-c-chain-rpc.publicnode.com
     - https://api.avax.network/ext/bc/C/rpc
     - https://avalanche.drpc.org
+
+# ---------------------------------------------------------------------------
+# Hyperliquid
+# ---------------------------------------------------------------------------
+# HyperEVM - regular EVM chain (ERC-20 on Hyperliquid). The official RPC limits
+# eth_getLogs to small ranges, so log_chunk is small and auto-halves further.
+hyperevm:
+  chain_id: 999
+  explorer: https://hyperevmscan.io
+  defillama: hyperliquid      # DefiLlama coins prefix for HyperEVM tokens
+  coingecko: hyperevm
+  etherscan_api: https://api.etherscan.io/v2/api
+  confirmations: 5
+  log_chunk: 50
+  initial_lookback: 100
+  max_blocks_per_run: 5000
+  rpc_urls:
+    - https://rpc.hyperliquid.xyz/evm
+
+# HyperCore - Hyperliquid L1 spot tokens (HYPE, PURR, ...). Token "address" in the
+# bot config is the token NAME, e.g. "HYPE". Free official info API, no key.
+# initial_lookback for non-EVM chains is in SECONDS.
+hypercore:
+  kind: hypercore
+  api_url: https://api.hyperliquid.xyz/info
+  explorer: https://hypurrscan.io
+  initial_lookback: 600
+
+# ---------------------------------------------------------------------------
+# Tron (TRC-20) - TronGrid, works without a key; TRONGRID_API_KEY (free) raises limits.
+# ---------------------------------------------------------------------------
+tron:
+  kind: tron
+  api_url: https://api.trongrid.io
+  explorer: https://tronscan.org
+  tx_path: "/#/transaction/{}"
+  address_path: "/#/address/{}"
+  defillama: tron
+  coingecko: tron
+  initial_lookback: 300
+
+# ---------------------------------------------------------------------------
+# Solana (SPL / Token-2022) - public JSON-RPC. For many watched wallets add a free
+# Helius / QuickNode URL in the bot config: chains.solana.rpc_urls: [${SOLANA_RPC_URL}]
+# ---------------------------------------------------------------------------
+solana:
+  kind: solana
+  explorer: https://solscan.io
+  address_path: "/account/{}"
+  defillama: solana
+  coingecko: solana
+  initial_lookback: 300
+  rpc_urls:
+    - https://api.mainnet-beta.solana.com
+    - https://solana-rpc.publicnode.com

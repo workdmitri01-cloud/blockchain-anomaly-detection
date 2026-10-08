@@ -13,10 +13,11 @@ from ..common.config import (
     parse_telegram,
     parse_tokens,
 )
+from ..common.addr import norm
 from ..common.evm import TRANSFER_TOPIC, chunked
 from ..common.labels import AddressBook, Label
 from ..common.runner import Alert, BaseAlerter, Valued
-from ..common.telegram import esc, fmt_amount, fmt_usd, short
+from ..common.telegram import esc, fmt_amount, fmt_usd, short, special_label, where
 
 
 @dataclass
@@ -27,6 +28,8 @@ class ExchangeBotConfig(BaseBotConfig):
     exclude_exchanges: list[str] = field(default_factory=list)
     # {address: "Exchange name"} added on top of the open-source address book.
     extra_exchange_addresses: dict[str, str] = field(default_factory=dict)
+    # EVM-format exchange accounts on Hyperliquid HyperCore to poll.
+    hypercore_exchange_addresses: dict[str, str] = field(default_factory=dict)
     # Binance hot -> Binance cold etc.
     alert_same_exchange: bool = False
     # Binance -> OKX
@@ -59,12 +62,13 @@ def load_config(path: str, dry_run: bool = False) -> ExchangeBotConfig:
         min_usd=float(raw.get("min_usd", 80_000)),
         include_exchanges=list(ex.get("include") or []),
         exclude_exchanges=list(ex.get("exclude") or []),
-        extra_exchange_addresses={k.lower(): v for k, v in (ex.get("extra_addresses") or {}).items()},
+        extra_exchange_addresses={norm(k): v for k, v in (ex.get("extra_addresses") or {}).items()},
+        hypercore_exchange_addresses={norm(k): v for k, v in (ex.get("hypercore_addresses") or {}).items()},
         alert_same_exchange=bool(raw.get("alert_same_exchange", False)),
         alert_exchange_to_exchange=bool(raw.get("alert_exchange_to_exchange", True)),
         track_deposit_addresses=bool(raw.get("track_deposit_addresses", True)),
         deposit_memory_hours=float(raw.get("deposit_memory_hours", 72)),
-        known_addresses={k.lower(): v for k, v in (raw.get("known_addresses") or {}).items()},
+        known_addresses={norm(k): v for k, v in (raw.get("known_addresses") or {}).items()},
     )
 
 
@@ -81,8 +85,18 @@ class ExchangeFlowsAlerter(BaseAlerter):
             self.book.remove_entities(self.cfg.exclude_exchanges)
         for addr, entity in self.cfg.extra_exchange_addresses.items():
             self.book.add(addr, entity)
+        for addr, entity in self.cfg.hypercore_exchange_addresses.items():
+            self.book.add(addr, entity, family="hypercore")
         if not len(self.book):
             raise ValueError("exchange flows bot: exchange address book is empty - run scripts/update_labels.py")
+
+    def poll_mode(self, chain: ChainConfig) -> str:
+        # Tron: every transfer of the tracked TRC-20s, exchanges matched locally (like EVM).
+        # Solana / HyperCore have no such cheap query -> poll the exchange wallets themselves.
+        return "tokens" if chain.kind == "tron" else "accounts"
+
+    def watch_addresses(self, chain: ChainConfig) -> set[str]:
+        return self.book.addresses_for(chain.kind)
 
     def log_filters(self, chain: ChainConfig) -> list[dict]:
         # One query returns every Transfer of every tracked token on the chain.
@@ -113,6 +127,9 @@ class ExchangeFlowsAlerter(BaseAlerter):
 
     # formatting ---------------------------------------------------------------------
     def _who(self, chain: ChainConfig, addr: str, label: Label | None) -> str:
+        special = special_label(chain, addr)
+        if special and not label:
+            return special
         link = f'<a href="{chain.address_url(addr)}">{short(addr)}</a>'
         if label:
             return f"🏦 <b>{esc(label.entity)}</b> [{esc(label.name)}] ({link})"
@@ -151,7 +168,7 @@ class ExchangeFlowsAlerter(BaseAlerter):
             text = (
                 f"{head}\n\n"
                 f"💰 <b>{fmt_amount(v.amount)} {esc(v.symbol)}</b> (~<b>{fmt_usd(v.usd)}</b>)\n"
-                f"⛓ {esc(chain.name)} · блок {tr.block}\n"
+                f"{where(chain, tr)}\n"
                 f"От: {self._who(chain, tr.from_addr, src)}\n"
                 f"Кому: {self._who(chain, tr.to_addr, dst)}\n"
             )

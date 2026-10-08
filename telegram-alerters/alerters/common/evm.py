@@ -52,7 +52,11 @@ class Transfer:
     raw_amount: int
     tx_hash: str
     log_index: int
-    block: int
+    block: int  # block / slot number (0 if the source does not report it)
+    # Optional data that non-EVM sources already know (saves lookups).
+    decimals: int | None = None
+    symbol: str | None = None
+    usd: float | None = None
 
     @property
     def key(self) -> str:

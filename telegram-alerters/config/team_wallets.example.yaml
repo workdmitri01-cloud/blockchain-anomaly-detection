@@ -19,6 +19,15 @@ tokens:
     # min_usd: 1000       # порог именно для этого токена
   # - chain: bsc
   #   address: "0x..."
+  # --- другие сети (раскомментируйте нужные) ---
+  # - chain: tron                       # TRC-20, адрес в формате T...
+  #   address: "TXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX"
+  # - chain: solana                     # SPL mint (регистр важен!)
+  #   address: "So11111111111111111111111111111111111111112"
+  # - chain: hyperevm                   # ERC-20 на HyperEVM
+  #   address: "0x..."
+  # - chain: hypercore                  # спот-токен Hyperliquid L1 — указывается ИМЯ токена
+  #   address: "PURR"
 
 # ----------------------------------------------------------------------
 # АВТОПОИСК командных кошельков — бот сам находит их по каждому токену:

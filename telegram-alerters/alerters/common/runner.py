@@ -41,7 +41,7 @@ class BaseAlerter:
         self.sender = sender
         self.state = state
         self.oracle = oracle or PriceOracle()
-        self.rpcs = rpcs or {name: EvmRpc(c.rpc_urls) for name, c in cfg.chains.items()}
+        self.rpcs = rpcs or {name: make_client(c) for name, c in cfg.chains.items()}
         self._stop = False
         for t in cfg.tokens:
             self.oracle.set_metadata(t.chain, t.address, t.symbol, t.decimals)
@@ -59,6 +59,14 @@ class BaseAlerter:
 
     def handle(self, chain: ChainConfig, transfers: list[Valued]) -> list[Alert]:
         raise NotImplementedError
+
+    def watch_addresses(self, chain: ChainConfig) -> set[str]:
+        """Accounts to poll on non-EVM chains (team wallets / exchange wallets)."""
+        return set()
+
+    def poll_mode(self, chain: ChainConfig) -> str:
+        """'accounts' (poll watched accounts) or 'tokens' (all transfers of tracked tokens)."""
+        return "accounts"
 
     def before_scan(self) -> None:
         """Hook called at the start of every polling cycle (e.g. periodic discovery)."""
@@ -78,13 +86,15 @@ class BaseAlerter:
             if tr.token not in tokens:
                 continue
             info = self.oracle.get(chain.name, tr.token)
+            if info.decimals is None and tr.decimals is not None:
+                self.oracle.set_metadata(chain.name, tr.token, tr.symbol, tr.decimals)
             if info.decimals is None:
                 sym, dec = self.rpcs[chain.name].erc20_metadata(tr.token)
                 self.oracle.set_metadata(chain.name, tr.token, sym, dec if dec is not None else 18)
                 self.state.extra.setdefault("meta", {})[f"{chain.name}:{tr.token}"] = [info.symbol, info.decimals]
             amount = tr.raw_amount / (10 ** info.decimals)
-            usd = amount * info.price if info.price else None
-            out.append(Valued(tr, info.symbol or tr.token[:8], amount, usd))
+            usd = amount * info.price if info.price else tr.usd
+            out.append(Valued(tr, info.symbol or tr.symbol or tr.token[:8], amount, usd))
         return out
 
     def fetch_transfers(self, chain: ChainConfig, start: int, end: int) -> list[Transfer]:
@@ -100,8 +110,37 @@ class BaseAlerter:
         self.state.chunk[chain.name] = chunk
         return sorted(seen.values(), key=lambda t: (t.block, t.log_index))
 
+    def _deliver(self, alerts: list[Alert]) -> None:
+        for alert in alerts:
+            if self.state.was_sent(alert.key):
+                continue
+            self.sender.send(alert.text)
+            self.state.mark_sent(alert.key)
+            self.state.save()
+
+    def scan_source(self, chain: ChainConfig) -> bool:
+        """Non-EVM chains: cursor-based polling through the chain client."""
+        cursors = self.state.extra.setdefault("cursor", {})
+        tokens = [t.address for t in self.cfg.tokens_for(chain.name)]
+        mode = self.poll_mode(chain)
+        watch = self.watch_addresses(chain) if mode == "accounts" else set()
+        if mode == "accounts" and not watch:
+            log.warning("[%s] %s: nothing to watch", self.name, chain.name)
+            return True
+        transfers, cursor = self.rpcs[chain.name].poll(
+            chain.name, cursors.get(chain.name, {}), tokens, watch, mode, chain.initial_lookback)
+        transfers = [t for t in transfers if t.raw_amount > 0]
+        alerts = self.handle(chain, self.value(chain, transfers)) if transfers else []
+        self._deliver(alerts)
+        cursors[chain.name] = cursor  # advance only after alerts were delivered
+        self.state.save()
+        log.info("[%s] %s: %d transfers, %d alerts", self.name, chain.name, len(transfers), len(alerts))
+        return True
+
     def scan_chain(self, chain: ChainConfig) -> bool:
         """Scan the next block range. Returns True if the chain is caught up."""
+        if chain.kind != "evm":
+            return self.scan_source(chain)
         rpc = self.rpcs[chain.name]
         head = rpc.block_number() - chain.confirmations
         last = self.state.last_block.get(chain.name)
@@ -113,12 +152,7 @@ class BaseAlerter:
         end = min(head, last + chain.max_blocks_per_run)
         transfers = self.fetch_transfers(chain, last + 1, end)
         alerts = self.handle(chain, self.value(chain, transfers)) if transfers else []
-        for alert in alerts:
-            if self.state.was_sent(alert.key):
-                continue
-            self.sender.send(alert.text)
-            self.state.mark_sent(alert.key)
-            self.state.save()
+        self._deliver(alerts)
         self.state.last_block[chain.name] = end
         self.state.save()
         log.info("[%s] %s: blocks %d-%d, %d transfers, %d alerts",
@@ -153,6 +187,23 @@ class BaseAlerter:
             while sleep > 0 and not self._stop:
                 time.sleep(min(sleep, 1))
                 sleep -= 1
+
+
+def make_client(chain: ChainConfig):
+    """Chain client: EvmRpc for EVM chains, polling clients for Tron / Solana / HyperCore."""
+    if chain.kind == "tron":
+        from .tron import DEFAULT_API, TronClient
+
+        return TronClient(chain.api_url or DEFAULT_API)
+    if chain.kind == "solana":
+        from .solana import SolanaClient
+
+        return SolanaClient(chain.rpc_urls)
+    if chain.kind == "hypercore":
+        from .hypercore import DEFAULT_API, HyperCoreClient
+
+        return HyperCoreClient(chain.api_url or DEFAULT_API)
+    return EvmRpc(chain.rpc_urls)
 
 
 def cli_args(description: str, default_config: str) -> argparse.Namespace:

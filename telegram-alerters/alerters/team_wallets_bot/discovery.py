@@ -23,7 +23,7 @@ import logging
 import re
 from dataclasses import dataclass, field
 
-from ..common.evm import decode_transfer
+from ..common.addr import TRON_ZERO, norm
 from ..common.explorer import AddressInfo, Explorer
 from ..common.labels import AddressBook
 from ..common.telegram import short
@@ -31,8 +31,13 @@ from ..common.telegram import short
 log = logging.getLogger(__name__)
 
 ZERO = "0x" + "0" * 40
+# "From" addresses that mean a mint (EVM 0x0, Tron's zero address, Solana mint pseudo-party).
+MINT_FROM = {ZERO, TRON_ZERO, "mint"}
 BURN = {
     ZERO,
+    TRON_ZERO,
+    "mint",
+    "burn",
     "0x000000000000000000000000000000000000dead",
     "0xdead000000000000000042069420694206942069",
     "0x0000000000000000000000000000000000000001",
@@ -50,7 +55,7 @@ NON_TEAM_RE = re.compile(
 TEAM_RE = re.compile(
     r"(safe|multisig|multi-sig|gnosis|vest|timelock|time lock|token ?lock|treasury|team|"
     r"foundation|dao\b|governor|reserve|ecosystem|escrow|allocation|advisors?|investors?|"
-    r"marketing|operations|development)",
+    r"marketing|operations|development|non-circulating)",
     re.I,
 )
 
@@ -101,7 +106,7 @@ def discover(chain: str, token: str, symbol: str | None, rpc, explorer: Explorer
              params: DiscoveryParams | None = None) -> tuple[list[Candidate], list[Candidate]]:
     """Returns (team_wallets, low_confidence_candidates)."""
     p = params or DiscoveryParams()
-    token = token.lower()
+    token = norm(token)
     cands: dict[str, Candidate] = {}
 
     def cand(addr: str) -> Candidate:
@@ -111,10 +116,10 @@ def discover(chain: str, token: str, symbol: str | None, rpc, explorer: Explorer
     holders = explorer.top_holders(token, p.top_holders) if p.top_holders else []
     if not supply and holders:
         supply = sum(v for _, v, _ in holders) or None
-    transfers = [t for t in (decode_transfer(chain, lg) for lg in explorer.first_transfer_logs(token)) if t]
+    transfers = list(explorer.first_transfers(chain, token))
     transfers.sort(key=lambda t: (t.block, t.log_index))
     if not supply:
-        supply = sum(t.raw_amount for t in transfers if t.from_addr == ZERO) or None
+        supply = sum(t.raw_amount for t in transfers if t.from_addr in MINT_FROM) or None
     big = (supply * p.min_share_pct / 100) if supply else 0
 
     # 1. Deployer
@@ -129,7 +134,7 @@ def discover(chain: str, token: str, symbol: str | None, rpc, explorer: Explorer
     # 2. Mint + initial distribution tree (oldest transfers, chronological)
     depth: dict[str, int] = {deployer: 0} if deployer else {}
     for tr in transfers:
-        if tr.from_addr == ZERO:
+        if tr.from_addr in MINT_FROM:
             if tr.to_addr not in BURN and tr.raw_amount >= big:
                 cand(tr.to_addr).add(4, "получил токены при минте")
                 depth.setdefault(tr.to_addr, 0)

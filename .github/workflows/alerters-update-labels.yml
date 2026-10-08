@@ -21,7 +21,7 @@ jobs:
         with:
           python-version: "3.12"
       - run: pip install -r requirements.txt
-      - run: python scripts/update_labels.py
+      - run: python scripts/update_labels.py --hypercore
       - name: Commit if changed
         run: |
           if git diff --quiet -- data/cex_addresses.json; then echo "no changes"; exit 0; fi
