@@ -47,6 +47,7 @@ class ChainConfig:
     # Explorers for team-wallet auto-discovery.
     blockscout: str | None = None
     etherscan_api: str | None = None
+    nodereal: str | None = None
 
     def tx_url(self, tx_hash: str) -> str:
         return f"{self.explorer.rstrip('/')}/tx/{tx_hash}"

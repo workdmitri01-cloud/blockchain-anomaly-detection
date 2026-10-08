@@ -18,7 +18,7 @@
 |---|---|---|
 | Транзакции | `eth_getLogs` через публичные RPC (publicnode, llamarpc, drpc, официальные RPC сетей) с ротацией и авто-подбором диапазона блоков | не нужен (можно добавить свои Alchemy / Infura / QuickNode — используются первыми) |
 | Цены, decimals, symbol | [DefiLlama coins API](https://coins.llama.fi) — один батч-запрос на все токены | не нужен |
-| Поиск командных кошельков | [Blockscout](https://eth.blockscout.com) API (деплоер, первые переводы, топ-холдеры, имена контрактов) + Etherscan V2 / Routescan | не нужен (Etherscan-ключ бесплатный, нужен только для BSC) |
+| Поиск командных кошельков | [Blockscout](https://eth.blockscout.com) API (деплоер, первые переводы, топ-холдеры, имена контрактов) + Etherscan V2 / Routescan; для **BSC** — [NodeReal MegaNode](https://nodereal.io/meganode) (данные BSCTrace) | ETH/Base/OP/Arbitrum/Polygon/Avalanche — не нужен; **BSC — бесплатный ключ NodeReal** (`NODEREAL_API_KEY`) |
 | Резерв цен | CoinGecko `simple/token_price` | не нужен (опц. demo-ключ) |
 | Адреса бирж | GitHub: [duneanalytics/spellbook `cex_evms_addresses.sql`](https://github.com/duneanalytics/spellbook/blob/main/dbt_subprojects/hourly_spellbook/models/_sector/cex/addresses/chains/cex_evms_addresses.sql) (курируемый список ~4.3k кошельков 300+ бирж) + [brianleect/etherscan-labels](https://github.com/brianleect/etherscan-labels) | не нужен |
 | Хостинг | GitHub Actions cron **или** любой VPS / Docker | — |
@@ -83,6 +83,19 @@ python -m alerters.team_wallets_bot.discover -c config/team_wallets.yaml
 Лишние адреса (инвесторы, OTC-покупатели) — в `exclude_wallets`; известные вручную — в `wallets` (их имена важнее).
 Найденные кошельки хранятся в `state/team_wallets.json`.
 
+### BSC
+
+С конца 2025 года BscScan API закрыт, а бесплатный тариф Etherscan V2 не покрывает BSC (а также Base, Optimism, Avalanche).
+Официальная замена от BNB Chain — BSCTrace на инфраструктуре **NodeReal MegaNode**, у неё есть бесплатный тариф:
+
+1. Зарегистрируйтесь на <https://nodereal.io/meganode> (вход через GitHub / Google) и создайте API key.
+2. Положите его в `NODEREAL_API_KEY` (`.env` или GitHub Secret).
+
+Бот возьмёт оттуда создателя контракта (`nr_getContractCreationTransaction`) и первые переводы токена (архивный `eth_getLogs`).
+Топ-холдеры на BSC не используются. Неверифицированные контракты распознаются прямым вызовом через RPC:
+`token0()` → DEX-пул (исключается), `getThreshold()` → Safe-мультисиг (командный). Мониторинг переводов
+(оба бота) на BSC работает и без ключа — через публичные RPC.
+
 ## Деплой
 
 ### Вариант A — Docker на любом сервере (рекомендуется, реальное время ~20–40 с)
@@ -108,7 +121,7 @@ Workflow-ы уже лежат в `.github/workflows/`:
 |---|---|---|
 | №1 | `TEAM_ALERTER_ENABLED=true` | `TEAM_BOT_TOKEN`, `TEAM_CHAT_ID`, `TEAM_CONFIG_YAML` (содержимое `team_wallets.yaml`) |
 | №2 | `EXCHANGE_ALERTER_ENABLED=true` | `EXCHANGE_BOT_TOKEN`, `EXCHANGE_CHAT_ID`, `EXCHANGE_CONFIG_YAML` |
-| общие, опц. | | `ETH_RPC_URL`, `COINGECKO_API_KEY`, `ETHERSCAN_API_KEY` |
+| общие, опц. | | `ETH_RPC_URL`, `COINGECKO_API_KEY`, `ETHERSCAN_API_KEY`, `NODEREAL_API_KEY` (нужен для автопоиска на BSC) |
 
 Состояние (последний блок, отправленные алерты) переносится между запусками через `actions/cache`.
 Ограничения: cron в GitHub Actions срабатывает не чаще раза в 5 минут и часто с задержкой; для **публичного** репозитория минуты бесплатны без лимита, для **приватного** — 2000 мин/мес (два бота каждые 5 минут ≈ 17k мин/мес — для приватного репо используйте вариант A или увеличьте интервал cron до `*/30`).

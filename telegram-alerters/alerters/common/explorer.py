@@ -184,6 +184,70 @@ class EtherscanExplorer(Explorer):
         return AddressInfo(is_contract=True, name=name)
 
 
+class NodeRealExplorer(Explorer):
+    """NodeReal MegaNode (official BNB Chain infra, free tier key) - BSCTrace data.
+
+    Creation tx via ``nr_getContractCreationTransaction``; early transfers via
+    eth_getLogs on the same archive endpoint starting at the creation block.
+    """
+
+    def __init__(self, rpc_url: str, window: int = 200_000, chunk: int = 5_000, session=None):
+        from .evm import EvmRpc
+
+        self.rpc = EvmRpc([rpc_url], session=session)
+        self.window = window
+        self.chunk = chunk
+        self._creation: dict[str, tuple[str, str, int]] = {}
+
+    def _create_info(self, address: str):
+        address = address.lower()
+        if address not in self._creation:
+            try:
+                res = self.rpc.call("nr_getContractCreationTransaction", [address])
+            except Exception as exc:  # noqa: BLE001
+                raise ExplorerError(str(exc)) from exc
+            if isinstance(res, dict) and isinstance(res.get("result"), dict):
+                res = res["result"]  # documented sample nests the object once more
+            if not res or not res.get("from"):
+                return None
+            block = res.get("blockNumber")
+            block = int(block, 16) if isinstance(block, str) and block.startswith("0x") else int(block or 0)
+            self._creation[address] = (res["from"].lower(), (res.get("hash") or "").lower(), block)
+        return self._creation[address]
+
+    def contract_creation(self, address):
+        info = self._create_info(address)
+        return (info[0], info[1]) if info else None
+
+    def first_transfer_logs(self, token, limit=1000):
+        info = self._create_info(token)
+        if not info:
+            return []
+        start = info[2]
+        try:
+            head = self.rpc.block_number()
+            out: list[dict] = []
+            chunk = self.chunk
+            while start <= head and start < info[2] + self.window and len(out) < limit:
+                end = min(head, start + chunk - 1)
+                logs, chunk = self.rpc.get_logs(start, end, address=token, topics=[TRANSFER_TOPIC], chunk=chunk)
+                out.extend(logs)
+                start = end + 1
+        except Exception as exc:  # noqa: BLE001
+            raise ExplorerError(str(exc)) from exc
+        return out[:limit]
+
+    def top_holders(self, token, limit=50):
+        return []  # NodeReal holder lists are an async batch API - not used
+
+    def address_info(self, address):
+        try:
+            code = self.rpc.call("eth_getCode", [address, "latest"])
+        except Exception as exc:  # noqa: BLE001
+            raise ExplorerError(str(exc)) from exc
+        return AddressInfo(is_contract=bool(code and code != "0x"))
+
+
 class MultiExplorer(Explorer):
     """Tries each backend until one answers."""
 
@@ -233,4 +297,7 @@ def explorer_for(chain) -> MultiExplorer:
     # etherscan.io itself refuses key-less calls; Routescan & co. work without a key.
     if api and (os.environ.get("ETHERSCAN_API_KEY") or "etherscan.io" not in api):
         backends.append(EtherscanExplorer(api, chain.chain_id))
+    nodereal = getattr(chain, "nodereal", None)
+    if nodereal and not nodereal.rstrip("/").endswith("/v1"):  # empty ${NODEREAL_API_KEY} -> skip
+        backends.append(NodeRealExplorer(nodereal))
     return MultiExplorer(backends)

@@ -8,8 +8,10 @@
 # defillama  - chain slug for https://coins.llama.fi (free prices, no key)
 # coingecko  - platform id for the CoinGecko fallback price API
 # blockscout    - free Blockscout explorer (no key) used by team-wallet auto-discovery
-# etherscan_api - Etherscan-compatible API; etherscan.io needs ETHERSCAN_API_KEY (free,
-#                 one key for all chains), Routescan works without a key
+# etherscan_api - Etherscan-compatible API; etherscan.io needs ETHERSCAN_API_KEY
+#                 (free tier: Ethereum/Arbitrum/Polygon..., NOT BSC/Base/OP/Avalanche),
+#                 Routescan works without a key
+# nodereal      - NodeReal MegaNode endpoint (BSC), free key in NODEREAL_API_KEY
 # log_chunk  - starting block range for eth_getLogs (auto-halved on "range too large")
 
 ethereum:
@@ -29,7 +31,11 @@ ethereum:
     - https://rpc.mevblocker.io
 
 bsc:
+  # Etherscan free tier no longer covers BSC (since late 2025) - works only with a paid key.
   etherscan_api: https://api.etherscan.io/v2/api
+  # NodeReal MegaNode = BSCTrace data, official BNB Chain replacement of the BscScan API.
+  # Free key: https://nodereal.io/meganode  ->  env NODEREAL_API_KEY
+  nodereal: https://bsc-mainnet.nodereal.io/v1/${NODEREAL_API_KEY}
   chain_id: 56
   explorer: https://bscscan.com
   defillama: bsc

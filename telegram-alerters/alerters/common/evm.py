@@ -190,6 +190,22 @@ class EvmRpc:
         except RpcError:
             return None
 
+    def responds_to(self, address: str, selector: str) -> bool:
+        """True if a no-arg view call succeeds and returns data (contract fingerprinting)."""
+        try:
+            res = self.call("eth_call", [{"to": address, "data": selector}, "latest"])
+            return bool(res and res != "0x" and len(res) >= 66)
+        except RpcError:
+            return False
+
+    def fingerprint(self, address: str) -> str | None:
+        """Identify unverified contracts without an explorer: AMM pair/pool or Safe multisig."""
+        if self.responds_to(address, "0x0dfe1681"):  # token0()
+            return "AMM pair / pool"
+        if self.responds_to(address, "0xe75235b8"):  # getThreshold()
+            return "Safe multisig"
+        return None
+
     def erc20_metadata(self, token: str) -> tuple[str | None, int | None]:
         """Read symbol() and decimals() via eth_call. Best effort."""
         symbol = decimals = None

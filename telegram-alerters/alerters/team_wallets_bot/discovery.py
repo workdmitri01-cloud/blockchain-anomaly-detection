@@ -174,6 +174,9 @@ def discover(chain: str, token: str, symbol: str | None, rpc, explorer: Explorer
                 info = AddressInfo()
         if info.is_contract is None and rpc:
             info.is_contract = rpc.is_contract(c.address)
+        if info.is_contract and not info.name and rpc and hasattr(rpc, "fingerprint"):
+            # No verified name (typical on BSC without a paid explorer): probe the contract.
+            info.name = rpc.fingerprint(c.address)
         c.info = info
         kind = classify(info)
         if kind == "non_team":

@@ -160,3 +160,62 @@ def test_follow_depth_limit(tmp_path):
     bot.rpcs["ethereum"].logs = [make_log(FRESH, WHALE, 60_000 * E18, block=105)]
     bot.run_once()
     assert WHALE not in bot.team_wallets("ethereum")
+
+
+# --- BSC without a paid explorer ------------------------------------------------------
+
+from alerters.common.evm import TRANSFER_TOPIC as _T
+from alerters.common.explorer import NodeRealExplorer
+
+
+class FakeJsonRpc:
+    """requests.Session stand-in answering JSON-RPC by method name."""
+
+    def __init__(self, handlers):
+        self.handlers = handlers
+        self.methods = []
+
+    def post(self, url, json, timeout):
+        self.methods.append(json["method"])
+        result = self.handlers[json["method"]](json["params"])
+
+        class R:
+            status_code = 200
+
+            def json(self_inner):
+                return {"jsonrpc": "2.0", "id": json["id"], "result": result}
+
+        return R()
+
+
+def test_nodereal_creation_and_early_logs():
+    early = make_log(ZERO, DEPLOYER, SUPPLY, block=1000)
+    session = FakeJsonRpc({
+        # documented response nests the object in another result wrapper
+        "nr_getContractCreationTransaction": lambda p: {"result": {"from": DEPLOYER, "hash": "0xabc", "blockNumber": "0x3e8"}},
+        "eth_blockNumber": lambda p: hex(1500),
+        "eth_getLogs": lambda p: [early] if int(p[0]["fromBlock"], 16) <= 1000 <= int(p[0]["toBlock"], 16) else [],
+    })
+    nr = NodeRealExplorer("https://bsc-mainnet.nodereal.io/v1/key", chunk=300, session=session)
+    assert nr.contract_creation(TOKEN) == (DEPLOYER, "0xabc")
+    logs = nr.first_transfer_logs(TOKEN)
+    assert logs == [early]
+    assert session.methods.count("nr_getContractCreationTransaction") == 1  # cached
+
+
+def test_unverified_pair_detected_by_fingerprint():
+    class NoNames(FakeExplorer):
+        def top_holders(self, token, limit=50):
+            return []
+
+        def address_info(self, address):
+            return AddressInfo(is_contract=INFOS.get(address, AddressInfo()).is_contract)
+
+    class ProbeRpc(DiscoveryRpc):
+        def fingerprint(self, address):
+            return {PAIR: "AMM pair / pool", SAFE: "Safe multisig"}.get(address)
+
+    team, low = discover("bsc", TOKEN, "XYZ", ProbeRpc([]), NoNames(), book())
+    addrs = {c.address for c in team} | {c.address for c in low}
+    assert PAIR not in addrs
+    assert SAFE in {c.address for c in team}

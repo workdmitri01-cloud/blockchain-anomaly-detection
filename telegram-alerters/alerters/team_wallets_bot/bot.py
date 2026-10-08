@@ -217,6 +217,8 @@ class TeamWalletsAlerter(BaseAlerter):
                 info = self.explorers[chain.name].address_info(dst)
             except Exception:  # noqa: BLE001
                 info = AddressInfo()
+            if not info.name and rpc:
+                info.name = rpc.fingerprint(dst)
             if classify(info) != "team":
                 return False
         return self._add_auto(chain.name, dst, f"🤖 от {parent.name.removeprefix('🤖 ')}",
