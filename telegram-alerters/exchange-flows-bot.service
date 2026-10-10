@@ -1,0 +1,15 @@
+[Unit]
+Description=Exchange flows alerter (CEX deposits/withdrawals)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+WorkingDirectory=/root/telegram-alerters
+EnvironmentFile=/root/telegram-alerters/.env
+Environment=PYTHONUNBUFFERED=1
+ExecStart=/root/telegram-alerters/venv/bin/python -m alerters.exchange_flows_bot -c config/exchange_flows.yaml
+Restart=always
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target

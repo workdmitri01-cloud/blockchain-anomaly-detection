@@ -123,6 +123,22 @@ avalanche:
     - https://api.avax.network/ext/bc/C/rpc
     - https://avalanche.drpc.org
 
+# Gnosis Chain (ex-xDai). ~5s blocks. DefiLlama/CoinGecko still use the "xdai" slug.
+gnosis:
+  blockscout: https://gnosis.blockscout.com
+  etherscan_api: https://api.etherscan.io/v2/api
+  chain_id: 100
+  explorer: https://gnosisscan.io
+  defillama: xdai
+  coingecko: xdai
+  confirmations: 2
+  log_chunk: 1000
+  initial_lookback: 100
+  rpc_urls:
+    - https://rpc.gnosischain.com
+    - https://gnosis-rpc.publicnode.com
+    - https://gnosis.drpc.org
+
 # ---------------------------------------------------------------------------
 # Hyperliquid
 # ---------------------------------------------------------------------------

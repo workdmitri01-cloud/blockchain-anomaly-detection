@@ -1,0 +1,67 @@
+# ======================================================================
+#  Бот №2 — заводы / выводы на биржи (CEX), сеть Gnosis
+#  cp config/exchange_flows.gnosis.example.yaml config/exchange_flows.yaml
+# ======================================================================
+
+telegram:
+  bot_token: ${EXCHANGE_BOT_TOKEN}
+  chat_id: ${EXCHANGE_CHAT_ID}
+  # thread_id: 123          # ветка супергруппы, если нужно
+
+min_usd: 80000              # общий порог, $
+
+# Бот слушает только перечисленные токены (один getLogs на сеть за цикл).
+# Нативный xDAI (не токен) не отслеживается — только ERC-20.
+tokens:
+  - chain: gnosis
+    address: "0x9c58bacc331c9aa871afd802db6379a98e80cedb"   # GNO
+  - chain: gnosis
+    address: "0xddafbb505ad214d7b80b1f830fccc89b60fb7a83"   # USDC (bridged)
+    price_usd: 1.0
+  - chain: gnosis
+    address: "0x2a22f9c3b484c3629090feed35f17ff8f88f76f0"   # USDC.e (Circle)
+    price_usd: 1.0
+  - chain: gnosis
+    address: "0x4ecaba5870353805a9f068101a40e0f32ed605c6"   # USDT
+    price_usd: 1.0
+  - chain: gnosis
+    address: "0xe91d153e0b41518a2ce8dd3d7944fa863463a97d"   # WXDAI
+    price_usd: 1.0
+  - chain: gnosis
+    address: "0x6a023ccd1ff6f2045c3309768ead9e68f978f6e1"   # WETH
+  - chain: gnosis
+    address: "0x8e5bbbb09ed1ebde8674cda39a0c169401db4252"   # WBTC
+  - chain: gnosis
+    address: "0xcb444e90d8198415266c6a2724b7900fb12fc56e"   # EURe (Monerium)
+  - chain: gnosis
+    address: "0x177127622c4a00f3d409b75571e12cb3c8973d3c"   # COW
+  - chain: gnosis
+    address: "0x4d18815d14fe5c3304e87b3fa18318baa5c23820"   # SAFE
+  - chain: gnosis
+    address: "0x6c76971f98945ae98dd7d4dfca8711ebea946ea6"   # wstETH
+  # свой токен:
+  # - chain: gnosis
+  #   address: "0x..."
+  #   min_usd: 30000        # индивидуальный порог
+
+exchanges:
+  include: []               # только эти биржи, напр. [Binance, Kraken]; пусто = все
+  exclude: []
+  extra_addresses:          # свои адреса бирж на Gnosis (дополняют базу)
+    # "0x...": "Kraken"
+
+alert_same_exchange: false
+alert_exchange_to_exchange: true
+track_deposit_addresses: true
+deposit_memory_hours: 72
+
+known_addresses: {}
+
+# Свой RPC (например, eRPC с сетью gnosis) — будет основным, публичные останутся резервом
+chains:
+  gnosis:
+    rpc_urls:
+      - ${GNOSIS_RPC_URL}
+
+state_file: state/exchange_flows.json
+poll_interval: 20

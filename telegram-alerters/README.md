@@ -56,6 +56,7 @@ python -m alerters.exchange_flows_bot -c config/exchange_flows.yaml
 | Сеть | Источник переводов | Бот №1 | Бот №2 (биржи) | Автопоиск кошельков | Ключ |
 |---|---|---|---|---|---|
 | Ethereum, Arbitrum, Base, Optimism, Polygon | `eth_getLogs`, публичные RPC | ✅ | ✅ все ~4.3k адресов CEX | ✅ полный (Blockscout) | не нужен |
+| Gnosis | `eth_getLogs`, публичные RPC (`config/exchange_flows.gnosis.example.yaml`) | ✅ | ✅ | ✅ (Blockscout) | не нужен |
 | Avalanche | `eth_getLogs` | ✅ | ✅ | ✅ без топ-холдеров (Routescan) | не нужен |
 | BSC | `eth_getLogs` | ✅ | ✅ | ✅ без топ-холдеров (NodeReal) | `NODEREAL_API_KEY` для автопоиска |
 | **HyperEVM** | `eth_getLogs`, `rpc.hyperliquid.xyz/evm` | ✅ | ✅ | ⚠️ только деплоер/распознавание по RPC | не нужен |
