@@ -32,6 +32,13 @@ auto_tokens:
 learn_deposit_addresses: true
 deposit_lookback_blocks: 5000   # где искать отправителя при первом свипе (~7 ч на Gnosis)
 
+# Выводы с бирж на фреш-кошельки (новый EOA без исходящих транзакций) — помечаются 🆕
+fresh_wallets:
+  enabled: true
+  max_nonce: 0              # сколько исходящих tx ещё считается «фреш» (0 = ни одной)
+  min_usd: 30000            # свой порог для фреш-выводов (ниже общего min_usd); пусто = как min_usd
+  only: false               # true = из выводов слать ТОЛЬКО фреш-кошельки
+
 exchanges:
   include: []               # только эти биржи, напр. [Binance, Kraken]; пусто = все
   exclude: []

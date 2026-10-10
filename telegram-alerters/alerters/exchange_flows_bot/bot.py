@@ -78,6 +78,11 @@ class ExchangeBotConfig(BaseBotConfig):
     min_price_confidence: float = 0.8    # DefiLlama confidence for auto tokens
     learn_deposit_addresses: bool = True
     deposit_lookback_blocks: int = 5000  # where to look for the original sender at first sweep
+    # --- withdrawals to fresh wallets (EVM): EOA with <= fresh_max_nonce outgoing txs ---
+    fresh_enabled: bool = True
+    fresh_max_nonce: int = 0
+    fresh_min_usd: float | None = None   # lower threshold for fresh-wallet withdrawals
+    fresh_only: bool = False             # withdrawals: alert only when the receiver is fresh
 
 
 def load_config(path: str, dry_run: bool = False) -> ExchangeBotConfig:
@@ -96,6 +101,7 @@ def load_config(path: str, dry_run: bool = False) -> ExchangeBotConfig:
     exclude_symbols = set(DEFAULT_EXCLUDE_SYMBOLS) if auto.get("default_excludes", True) else set()
     exclude_symbols |= {str(s).upper() for s in (auto.get("exclude_symbols") or [])}
     exclude_symbols -= {str(s).upper() for s in (auto.get("allow_symbols") or [])}
+    fresh = raw.get("fresh_wallets") or {}
     return ExchangeBotConfig(
         telegram=telegram,
         chains=load_chains(raw.get("chains"), {t.chain for t in tokens} | set(auto_chains)),
@@ -121,6 +127,10 @@ def load_config(path: str, dry_run: bool = False) -> ExchangeBotConfig:
         min_price_confidence=float(auto.get("min_price_confidence", 0.8)),
         learn_deposit_addresses=bool(raw.get("learn_deposit_addresses", True)),
         deposit_lookback_blocks=int(raw.get("deposit_lookback_blocks", 5000)),
+        fresh_enabled=bool(fresh.get("enabled", True)),
+        fresh_max_nonce=int(fresh.get("max_nonce", 0)),
+        fresh_min_usd=float(fresh["min_usd"]) if fresh.get("min_usd") not in (None, "") else None,
+        fresh_only=bool(fresh.get("only", False)),
     )
 
 
@@ -212,6 +222,19 @@ class ExchangeFlowsAlerter(BaseAlerter):
             self._eoa[addr] = not res
         return self._eoa[addr]
 
+    def _fresh(self, chain: ChainConfig, addr: str) -> int | None:
+        """Outgoing tx count if addr is a fresh EOA (<= fresh_max_nonce), else None."""
+        if chain.kind != "evm" or not self.cfg.fresh_enabled:
+            return None
+        rpc = self.rpcs[chain.name]
+        try:
+            nonce = int(rpc.call("eth_getTransactionCount", [addr, "latest"]), 16)
+        except Exception:  # noqa: BLE001
+            return None
+        if nonce > self.cfg.fresh_max_nonce or rpc.is_contract(addr) is not False:
+            return None
+        return nonce
+
     def _lookback_origin(self, chain: ChainConfig, tr) -> tuple[str, str] | None:
         """Who sent this token to the deposit address before its first sweep."""
         try:
@@ -292,6 +315,15 @@ class ExchangeFlowsAlerter(BaseAlerter):
 
             threshold = self._min_usd(chain.name, tr.token)
             big = v.usd is not None and v.usd >= threshold
+            fresh = None
+            if src and not dst and not dep_dst and v.usd is not None and self.cfg.fresh_enabled:
+                fresh_thr = min(threshold, self.cfg.fresh_min_usd or threshold)
+                if v.usd >= fresh_thr and (big or self.cfg.fresh_min_usd or self.cfg.fresh_only):
+                    fresh = self._fresh(chain, tr.to_addr)
+                if fresh is not None:
+                    big = v.usd >= fresh_thr
+                elif self.cfg.fresh_only:
+                    continue
             if not src and not dst and not dep_dst:
                 if big and self.cfg.track_deposit_addresses:
                     self._remember(v)
@@ -322,6 +354,8 @@ class ExchangeFlowsAlerter(BaseAlerter):
                     origin = self._lookback_origin(chain, tr)
             else:
                 head = f"📤 <b>ВЫВОД с биржи {esc(src.entity)}</b>"
+                if fresh is not None:
+                    head += " → 🆕 <b>фреш-кошелёк</b>"
             text = (
                 f"{head}\n\n"
                 f"💰 <b>{fmt_amount(v.amount)} {esc(v.symbol)}</b> (~<b>{fmt_usd(v.usd)}</b>)\n"
@@ -329,6 +363,8 @@ class ExchangeFlowsAlerter(BaseAlerter):
                 f"От: {self._who(chain, tr.from_addr, src)}\n"
                 f"Кому: {self._who(chain, tr.to_addr, dst)}\n"
             )
+            if fresh is not None:
+                text += f"🆕 Фреш-кошелёк: {fresh} исходящих tx\n"
             if origin:
                 text += (
                     f"↪️ Через депозитный адрес, исходный отправитель: "
