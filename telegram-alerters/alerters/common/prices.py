@@ -27,6 +27,8 @@ class TokenInfo:
     decimals: int | None = None
     price: float | None = None
     fetched_at: float = 0.0
+    # DefiLlama price confidence 0..1 (low for thin / manipulable pools); None = unknown
+    confidence: float | None = None
 
 
 class PriceOracle:
@@ -91,6 +93,8 @@ class PriceOracle:
                     continue
                 info = self.get(chain, token)
                 info.price = float(item.get("price") or 0) or None
+                conf = item.get("confidence")
+                info.confidence = float(conf) if conf is not None else None
                 info.symbol = info.symbol or item.get("symbol")
                 if info.decimals is None and item.get("decimals") is not None:
                     info.decimals = int(item["decimals"])

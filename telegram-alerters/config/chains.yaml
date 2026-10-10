@@ -132,8 +132,10 @@ gnosis:
   defillama: xdai
   coingecko: xdai
   confirmations: 2
-  log_chunk: 1000
+  # auto_tokens mode reads ALL Transfer logs -> keep the range small (auto-halves further)
+  log_chunk: 100
   initial_lookback: 100
+  max_blocks_per_run: 2000
   rpc_urls:
     - https://rpc.gnosischain.com
     - https://gnosis-rpc.publicnode.com

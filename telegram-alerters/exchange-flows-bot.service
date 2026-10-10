@@ -4,10 +4,10 @@ After=network-online.target
 Wants=network-online.target
 
 [Service]
-WorkingDirectory=/root/telegram-alerters
-EnvironmentFile=/root/telegram-alerters/.env
+WorkingDirectory=/root/blockchain-anomaly-detection/telegram-alerters
+EnvironmentFile=/root/blockchain-anomaly-detection/telegram-alerters/.env
 Environment=PYTHONUNBUFFERED=1
-ExecStart=/root/telegram-alerters/venv/bin/python -m alerters.exchange_flows_bot -c config/exchange_flows.yaml
+ExecStart=/root/blockchain-anomaly-detection/telegram-alerters/venv/bin/python -m alerters.exchange_flows_bot -c config/exchange_flows.yaml
 Restart=always
 RestartSec=10
 
