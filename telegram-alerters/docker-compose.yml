@@ -21,6 +21,17 @@ services:
       - exchange-state:/app/state
     restart: unless-stopped
 
+  fresh-wallets-bot:
+    build: .
+    command: ["alerters.fresh_wallets_bot", "-c", "config/fresh_wallets.yaml"]
+    env_file: .env
+    volumes:
+      - ./config/fresh_wallets.yaml:/app/config/fresh_wallets.yaml:ro
+      - ./data:/app/data:ro
+      - fresh-state:/app/state
+    restart: unless-stopped
+
 volumes:
+  fresh-state:
   team-state:
   exchange-state:

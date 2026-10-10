@@ -1,0 +1,40 @@
+# ======================================================================
+#  Бот №3 — выводы с бирж (CEX) на ФРЕШ-кошельки, сеть Gnosis
+#  cp config/fresh_wallets.gnosis.example.yaml config/fresh_wallets.yaml
+#  Отдельный бот: свой токен @BotFather, свой чат, свой state.
+# ======================================================================
+
+telegram:
+  bot_token: ${FRESH_BOT_TOKEN}
+  chat_id: ${FRESH_CHAT_ID}
+  # thread_id: 123
+
+min_usd: 30000              # порог вывода на фреш, $
+
+fresh:
+  max_nonce: 0              # сколько исходящих tx ещё считается «фреш» (0 = ни одной)
+
+# Токены подхватываются сами (как в боте №2); исключены стейблы, ETH/BTC/BNB/SOL
+# и их обёртки, золото, токены без цены / с тонким пулом.
+auto_tokens:
+  chains: [gnosis]
+  exclude_symbols: []
+  allow_symbols: []
+  exclude_addresses: []
+  min_price_confidence: 0.8
+
+# Депозитные адреса бирж выучиваются по свипам, чтобы не принимать их за фреш-кошельки
+learn_deposit_addresses: true
+
+exchanges:
+  include: []
+  exclude: []
+  extra_addresses: {}
+
+chains:
+  gnosis:
+    rpc_urls:
+      - ${GNOSIS_RPC_URL}
+
+state_file: state/fresh_wallets.json
+poll_interval: 20

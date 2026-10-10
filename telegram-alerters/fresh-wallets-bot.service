@@ -1,0 +1,15 @@
+[Unit]
+Description=Fresh wallets alerter (CEX withdrawals to fresh wallets)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+WorkingDirectory=/root/blockchain-anomaly-detection/telegram-alerters
+EnvironmentFile=/root/blockchain-anomaly-detection/telegram-alerters/.env
+Environment=PYTHONUNBUFFERED=1
+ExecStart=/root/blockchain-anomaly-detection/telegram-alerters/venv/bin/python -m alerters.fresh_wallets_bot -c config/fresh_wallets.yaml
+Restart=always
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target
